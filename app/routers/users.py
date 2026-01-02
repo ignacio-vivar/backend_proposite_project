@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from typing import List
 from app.database.database import get_db
 from app.models.user import User, USER_TYPE, UserUpdate
 from app.schemas.user import UserCreate, UserResponse, UserResponseName
 from app.routers.auth import check_admin, get_current_user
+from sqlalchemy import select
 
 router = APIRouter()
 
@@ -45,17 +47,27 @@ def update_user(
     return {"message": "User updated successfully"}
 
 @router.post("/register", response_model=UserResponse)
-def register(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == user.email).first()
+async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(User).where(User.email == user.email)
+    )
+    db_user = result.scalars().first()
+
     if db_user:
         raise HTTPException(status_code=400, detail="Email already exist")
 
-    new_user = User(email=user.email, name=user.name, user_type_id = USER_TYPE["Student"])
+    new_user = User(
+        email=user.email,
+        name=user.name,
+        user_type_id=USER_TYPE["Student"]
+    )
     new_user.set_password(user.password)
-    db.add(new_user)
-    db.commit()
-    return new_user
 
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    return new_user
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """
