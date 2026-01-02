@@ -8,4 +8,4 @@ passlib[bcrypt]
 python-multipart
 fastapi-pagination
 httpx
-psycopg2-library
+psycopg2-binary
