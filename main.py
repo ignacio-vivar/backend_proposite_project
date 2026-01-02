@@ -10,6 +10,8 @@ from app.routers.students.admin import admin_router as adm_student
 from fastapi.responses import RedirectResponse #Remove only testing
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.database import get_db
 
@@ -43,25 +45,24 @@ def redirect_to_docs():
     return RedirectResponse(url="/docs#")
 
 @app.get("/test-users")
-async def test_users():
+async def test_users(db: AsyncSession = Depends(get_db)):
     try:
-        from app.database.database import SessionLocal
         from app.models.user import User
-        
-        db = SessionLocal()
-        users = db.query(User).all()
-        db.close()
-        
+
+        result = await db.execute(select(User))
+        users = result.scalars().all()
+
         return {
             "status": "✅ OK",
             "user_count": len(users),
-            "users": [{"email": u.email, "name": u.name} for u in users]
+            "users": [{"email": u.email, "name": u.name} for u in users],
         }
     except Exception as e:
         return {
             "status": "❌ Error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @app.get("/test-login-debug")
 async def test_login_debug(db: Session = Depends(get_db)):
