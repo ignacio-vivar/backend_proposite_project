@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from sqlalchemy.orm import selectinload
+
 from app.database.database import get_db
 from sqlalchemy.orm import Session
 from app.models.student import Student
@@ -40,10 +42,10 @@ async def get_all_current_assignature(user: User = Depends(get_current_user), db
         raise HTTPException(status_code=404, detail="No existe el alumno")
 
     result_2 = await db.execute(
-        select(CurrentAssignatures).where(
-            CurrentAssignatures.student_id == student.id
-        )
-    )
+    select(CurrentAssignatures)
+    .options(selectinload(CurrentAssignatures.assignatures))
+    .where(CurrentAssignatures.student_id == student.id)
+)    
     current_assignatures = result_2.scalars().all()
 
     if not current_assignatures:
