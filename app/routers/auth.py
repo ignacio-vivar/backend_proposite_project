@@ -70,6 +70,8 @@ async def get_current_user(
         if not isinstance(user_id,str) or not user_id:
             raise credentials_exception
 
+        user_id = int(user_id)
+
         result = await db.execute(
             select(User).where(User.id == user_id)
         )
