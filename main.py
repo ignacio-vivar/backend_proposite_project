@@ -9,7 +9,9 @@ from app.routers.grades.student import student_router as grades_st_r
 from app.routers.students.admin import admin_router as adm_student
 from fastapi.responses import RedirectResponse #Remove only testing
 
+from sqlalchemy.orm import Session
 
+from app.database.database import get_db
 
 app = FastAPI(debug=False)
 
@@ -60,5 +62,30 @@ async def test_users():
             "status": "❌ Error",
             "error": str(e)
         }
+
+@app.get("/test-login-debug")
+async def test_login_debug(db: Session = Depends(get_db)):
+    try:
+        from app.models.user import User
+        user = db.query(User).filter(User.email == "p@m.com").first()
+        
+        if not user:
+            return {"error": "User not found"}
+        
+        # Intentar verificar password
+        password_ok = user.check_password("12341234")
+        
+        return {
+            "user_exists": True,
+            "has_password_hash": bool(user.password_hash),
+            "password_check": password_ok
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 if __name__ == "__main__":
     uvicorn.run(app,host="127.0.0.1",port=8000)
