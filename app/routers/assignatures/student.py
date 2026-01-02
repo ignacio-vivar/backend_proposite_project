@@ -39,12 +39,12 @@ async def get_all_current_assignature(user: User = Depends(get_current_user), db
     if not student:
         raise HTTPException(status_code=404, detail="No existe el alumno")
 
-    result = await db.execute(
+    result_2 = await db.execute(
         select(CurrentAssignatures).where(
             CurrentAssignatures.student_id == student.id
         )
     )
-    current_assignatures = result.scalars().all()
+    current_assignatures = result_2.scalars().all()
 
     if not current_assignatures:
         raise HTTPException(status_code=404, detail="No dispone de asignaturas")
