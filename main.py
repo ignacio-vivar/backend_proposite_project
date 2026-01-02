@@ -40,5 +40,26 @@ app.add_middleware(
 def redirect_to_docs():
     return RedirectResponse(url="/docs#")
 
+@app.get("/test-db")
+async def test_database():
+    try:
+        from app.database.database import SessionLocal
+        from app.models.user import User
+        
+        db = SessionLocal()
+        user_count = db.query(User).count()
+        db.close()
+        
+        return {
+            "status": "✅ Conexión exitosa",
+            "user_count": user_count,
+            "database_url": "Connected to PostgreSQL"
+        }
+    except Exception as e:
+        return {
+            "status": "❌ Error",
+            "error": str(e)
+        }
+
 if __name__ == "__main__":
     uvicorn.run(app,host="127.0.0.1",port=8000)
