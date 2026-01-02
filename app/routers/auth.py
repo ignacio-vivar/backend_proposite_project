@@ -9,6 +9,8 @@ from app.models.user import User, USER_TYPE
 from app.schemas.token import Token
 from app.core.config import ENV_LOGIN
 from app.core.security import create_access_token, SECRET_KEY, ALGORITHM
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -18,8 +20,13 @@ else:
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth")
 
 @router.post("/auth", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username).first()
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+
+    result = await db.execute(
+        select(User).where(User.email == form_data.username)
+    )
+    user = result.scalars().first()
+
     if not user or not user.check_password(form_data.password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
     is_teacher = user.user_type_id == USER_TYPE["Teacher"]
