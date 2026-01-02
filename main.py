@@ -37,10 +37,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+#Remove only testing
 @app.get("/")
 def redirect_to_docs():
     return RedirectResponse(url="/docs#")
 
+@app.get("/test-users")
+async def test_users():
+    try:
+        from app.database.database import SessionLocal
+        from app.models.user import User
+        
+        db = SessionLocal()
+        users = db.query(User).all()
+        db.close()
+        
+        return {
+            "status": "✅ OK",
+            "user_count": len(users),
+            "users": [{"email": u.email, "name": u.name} for u in users]
+        }
+    except Exception as e:
+        return {
+            "status": "❌ Error",
+            "error": str(e)
+        }
+
+@app.get("/test-login-debug")
+async def test_login_debug(db: Session = Depends(get_db)):
+    try:
+        from app.models.user import User
+        user = db.query(User).filter(User.email == "p@m.com").first()
+        
+        if not user:
+            return {"error": "User not found"}
+        
+        # Intentar verificar password
+        password_ok = user.check_password("12341234")
+        
+        return {
+            "user_exists": True,
+            "has_password_hash": bool(user.password_hash),
+            "password_check": password_ok
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 if __name__ == "__main__":
     uvicorn.run(app,host="127.0.0.1",port=8000)
