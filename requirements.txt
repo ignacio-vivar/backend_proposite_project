@@ -4,8 +4,8 @@ pydantic
 pydantic[email]
 sqlalchemy
 python-jose[cryptography]
-passlib[bcrypt]
+passlib
+bcrypt
 python-multipart
 fastapi-pagination
-httpx
 psycopg2-binary
