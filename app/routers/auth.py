@@ -86,7 +86,7 @@ async def get_current_user(
         raise credentials_exception
     
 
-def check_admin(current_user: User = Depends(get_current_user)):
+async def check_admin(current_user: User = Depends(get_current_user)):
 
     is_admin = bool(current_user.user_type_id == 3)
 
