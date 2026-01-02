@@ -57,7 +57,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 @router.get("/me", response_model=UserResponse)
-def get_current_user_info(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """
     Obtiene la información del usuario autenticado.
     """
