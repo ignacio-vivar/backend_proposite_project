@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
 from typing import List
 from app.database.database import get_db
 from app.models.user import User, USER_TYPE, UserUpdate
@@ -14,36 +13,40 @@ admin_router = APIRouter(prefix="/admin", tags=["Admin - Users"], dependencies=[
 router_develop = APIRouter(tags=["development"], prefix="/develop")
 
 @admin_router.put("/users/{user_id}")
-def update_user(
-    user_id: int, 
-    user_update: UserUpdate, 
-    db: Session = Depends(get_db)
+async def update_user(
+    user_id: int,
+    user_update: UserUpdate,
+    db: AsyncSession = Depends(get_db)
 ):
-    # Buscar el usuario por ID
-    db_user = db.query(User).filter(User.id == user_id).first()
-    
+    result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+    db_user = result.scalars().first()
+
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Verificar si el nuevo email ya existe en otro usuario
+
+    # Verificar email duplicado
     if user_update.email and user_update.email != db_user.email:
-        existing_user = db.query(User).filter(
-            User.email == user_update.email, 
-            User.id != user_id
-        ).first()
+        result = await db.execute(
+            select(User).where(
+                User.email == user_update.email,
+                User.id != user_id
+            )
+        )
+        existing_user = result.scalars().first()
         if existing_user:
             raise HTTPException(status_code=400, detail="Email already exists")
-    
-    # Actualizar solo los campos permitidos
+
     update_data = user_update.model_dump(exclude_unset=True)
-    
+
     for field, value in update_data.items():
-        if hasattr(db_user, field) and field in ['email', 'name']:
+        if field in ["email", "name"]:
             setattr(db_user, field, value)
-    
-    db.commit()
-    db.refresh(db_user)
-    
+
+    await db.commit()
+    await db.refresh(db_user)
+
     return {"message": "User updated successfully"}
 
 @router.post("/register", response_model=UserResponse)
@@ -79,7 +82,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return UserResponse(id=current_user.id, email=current_user.email, name=current_user.name)
 
 @router.get("/getName", response_model=UserResponseName)
-def get_current_user_name(current_user: User = Depends(get_current_user)):
+async def get_current_user_name(current_user: User = Depends(get_current_user)):
     """
     Obtiene la información del usuario autenticado.
     """
@@ -92,22 +95,21 @@ def get_current_user_name(current_user: User = Depends(get_current_user)):
 @router_develop.get("/getAll", response_model=List[UserResponse],
             summary="Obtener todos los usuarios",
             description="Devuelve una lista de todos los usuarios registrados.")
-def get_all_users(db: Session = Depends(get_db)):
-    """
-    Obtiene todos los usuarios registrados.
+async def get_all_users(db: AsyncSession = Depends(get_db)):
 
-    **Respuesta:**
-    - Lista de usuarios con `id`, `email`, y `name`.
-    """
-    users = db.query(User).all()
+    result = await db.execute(select(User))
+    users = result.scalars().all()
+
     return users
 
 @router_develop.get("/get/{user_id}", response_model=UserResponse)
-def get_user(
+async def get_user(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
