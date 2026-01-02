@@ -42,20 +42,24 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-def get_current_user(
+async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
-    # Acá me logeo solo supuestamente
-    if ENV_LOGIN == "development":
-        dev_user = db.query(User).filter(User.email == "admin@gmail.com").first()
-        if dev_user:
-            return dev_user
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Unauthorized",
     )
-    
+
+    # Modo Usuario
+    if ENV_LOGIN == "development":
+        result = await db.execute(
+            select(User).where(User.email == "admin@gmail.com")
+        )
+        dev_user = result.scalars().first()
+        if dev_user:
+            return dev_user    
+
     if not token:
         raise credentials_exception
 
@@ -66,7 +70,11 @@ def get_current_user(
         if not isinstance(user_id,str) or not user_id:
             raise credentials_exception
 
-        user = db.query(User).filter(User.id == user_id).first()
+        result = await db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalars().first()
+
         if user is None:
             raise credentials_exception
 
