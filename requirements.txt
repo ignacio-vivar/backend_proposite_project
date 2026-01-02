@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+pydantic[email]
+sqlalchemy
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+fastapi-pagination
+httpx
+psycopg2-library
