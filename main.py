@@ -28,7 +28,8 @@ app.include_router(grades_st_r)
 app.include_router(adm_student)
 
 origins = [
-    "http://localhost:5173"
+    "http://localhost:5173",
+    "https://proposite-project-admin-frontend-q1mw1k879.vercel.app"
 ]
 
 app.add_middleware(
