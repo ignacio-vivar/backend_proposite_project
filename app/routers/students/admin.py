@@ -1,7 +1,9 @@
 # routers/students.py
 from typing import List
-from fastapi import APIRouter, Depends,HTTPException
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 from app.database.database import get_db
 from app.models.user import User
 from app.models.student import Student
@@ -13,27 +15,46 @@ admin_router = APIRouter(prefix="/admin", tags=["Admin - Student + UserInfo"], d
 
 
 @admin_router.get("/students", response_model=list[StudentWithUser])
-def get_students(db: Session = Depends(get_db)):
-    students_with_users = db.query(Student).options(joinedload(Student.user)).all()
+async def get_students(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Student).options(selectinload(Student.user))
+    )
+    students_with_users = result.scalars().all()
     return students_with_users
 
 
 @admin_router.get("/students/{id}", response_model=StudentWithUser)
-def get_student_by_id(id: int, db: Session = Depends(get_db)):
-    student = db.query(Student).options(joinedload(Student.user)).filter(Student.id == id).first()
+async def get_student_by_id(id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Student)
+        .options(selectinload(Student.user))
+        .where(Student.id == id)
+    )
+    student = result.scalars().first()
+    
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
     
     return student
 
+
 @admin_router.post("/students/{user_id}", response_model=StudentWithUser)
-def add_student_data(user_id: int, data: StudentInfo, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
+async def add_student_data(user_id: int, data: StudentInfo, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Evitar duplicados
-    if user.student:
+    # Evitar duplicados - necesitamos cargar la relación student
+    result_user_with_student = await db.execute(
+        select(User)
+        .options(selectinload(User.student))
+        .where(User.id == user_id)
+    )
+    user_with_student = result_user_with_student.scalars().first()
+    
+    if user_with_student and user_with_student.student:
         raise HTTPException(status_code=400, detail="Student data already exists for this user")
 
     student = Student(
@@ -43,20 +64,28 @@ def add_student_data(user_id: int, data: StudentInfo, db: Session = Depends(get_
         active=data.active
     )
     db.add(student)
-    db.commit()
-    db.refresh(user)  # refresca para que traiga la relación
+    await db.commit()
+    await db.refresh(student)
 
-
-    student_with_user = db.query(Student).options(joinedload(Student.user)).filter(Student.id == student.id).first()
+    # Recargar con la relación user
+    result_final = await db.execute(
+        select(Student)
+        .options(selectinload(Student.user))
+        .where(Student.id == student.id)
+    )
+    student_with_user = result_final.scalars().first()
 
     return student_with_user
 
-@admin_router.patch("/students/disableSelecteds", response_model=dict)
-def disabled_student_select(select_users: List[int], db: Session = Depends(get_db)):
 
-    users_selected = (db.query(User)
-                      .options(joinedload(User.student))
-                      .filter(User.id.in_(select_users)).all())
+@admin_router.patch("/students/disableSelecteds", response_model=dict)
+async def disabled_student_select(select_users: List[int], db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.student))
+        .where(User.id.in_(select_users))
+    )
+    users_selected = result.scalars().all()
 
     if not users_selected:
         raise HTTPException(status_code=400, detail="There aren't any matches")
@@ -69,19 +98,21 @@ def disabled_student_select(select_users: List[int], db: Session = Depends(get_d
 
         print(u.name)
         if student:
-           student.active = False
+            student.active = False
 
-    db.commit()
+    await db.commit()
 
-    return {"message" : f"Disabled Students {names_output}"}
+    return {"message": f"Disabled Students {names_output}"}
 
 
 @admin_router.patch("/students/enableSelecteds", response_model=dict)
-def enabled_student_select(select_users: List[int], db: Session = Depends(get_db)):
-
-    users_selected = (db.query(User)
-                      .options(joinedload(User.student))
-                      .filter(User.id.in_(select_users)).all())
+async def enabled_student_select(select_users: List[int], db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.student))
+        .where(User.id.in_(select_users))
+    )
+    users_selected = result.scalars().all()
 
     if not users_selected:
         raise HTTPException(status_code=400, detail="There aren't any matches")
@@ -94,16 +125,23 @@ def enabled_student_select(select_users: List[int], db: Session = Depends(get_db
         names_output.append(u.name)
 
         if student:
-           student.active = True
+            student.active = True
 
-    db.commit()
+    await db.commit()
 
-    return {"message" : f"Enable Students {names_output}"}
+    return {"message": f"Enable Students {names_output}"}
+
 
 @admin_router.put("/students/{user_id}", response_model=StudentWithUser)
-def update_student_data(user_id: int, data: StudentInfo, db: Session = Depends(get_db)):
+async def update_student_data(user_id: int, data: StudentInfo, db: AsyncSession = Depends(get_db)):
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        result = await db.execute(
+            select(User)
+            .options(selectinload(User.student))
+            .where(User.id == user_id)
+        )
+        user = result.scalars().first()
+        
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -116,12 +154,18 @@ def update_student_data(user_id: int, data: StudentInfo, db: Session = Depends(g
         student.year = data.year
         student.active = data.active
 
-        db.commit()
-        db.refresh(user)
+        await db.commit()
 
-        student_with_user = db.query(Student).options(joinedload(Student.user)).filter(Student.id == student.id).first()
+        # Recargar con la relación
+        result_final = await db.execute(
+            select(Student)
+            .options(selectinload(Student.user))
+            .where(Student.id == student.id)
+        )
+        student_with_user = result_final.scalars().first()
+        
         return student_with_user
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error updating student data: {str(e)}")

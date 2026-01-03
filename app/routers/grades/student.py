@@ -1,7 +1,9 @@
 
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.database.database import get_db
 from app.models.student import Student
 from app.models.user import User
@@ -14,51 +16,67 @@ student_router = APIRouter(prefix="/student", tags=["Students Califications"])
 
 
 @student_router.get("/getStudentCalifications/", response_model=List[SubmissionStudentData])
-def get_califications_min(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_califications_min(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     # Obtener el student asociado al user
-    student = db.query(Student).filter(Student.user_id == user.id).first()
+    result = await db.execute(
+        select(Student).where(Student.user_id == user.id)
+    )
+    student = result.scalars().first()
     
     if not student:
         raise HTTPException(status_code=404, detail="Usuario no es estudiante")
     
-    # Obtener submissions con joins para traer task info
-    user_works = db.query(TaskSubmission)\
-        .options(joinedload(TaskSubmission.task))\
-        .filter(TaskSubmission.student_id == student.id)\
-        .all()
+    # Obtener submissions con selectinload para cargar la relación task
+    result_works = await db.execute(
+        select(TaskSubmission)
+        .options(selectinload(TaskSubmission.task))
+        .where(TaskSubmission.student_id == student.id)
+    )
+    user_works = result_works.scalars().all()
     
- # Validar integridad de datos
+    # Validar integridad de datos
     for work in user_works:
         if work.task is None:
             raise HTTPException(
                 status_code=500, 
                 detail=f"Datos corruptos: Submission {work.id} sin task asociado"
             )
-
+    
     return user_works
 
-
 @student_router.get("/getStudentCalificationsByAssignature/{assignature_id}", response_model=List[SubmissionStudentData])
-def get_califications_min_by_assignature(assignature_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_califications_min_by_assignature(
+    assignature_id: int, 
+    user: User = Depends(get_current_user), 
+    db: AsyncSession = Depends(get_db)
+):
     # Obtener el student asociado al user
-    student = db.query(Student).filter(Student.user_id == user.id).first()
+    result = await db.execute(
+        select(Student).where(Student.user_id == user.id)
+    )
+    student = result.scalars().first()
     
     if not student:
         raise HTTPException(status_code=404, detail="Usuario no es estudiante")
     
-    # Obtener submissions con joins para traer task info
-    user_works = db.query(TaskSubmission)\
-        .join(TaskSubmission.task)\
-        .options(joinedload(TaskSubmission.task))\
-        .filter(TaskSubmission.student_id == student.id, Tasks.assignature_id == assignature_id)\
-        .all()
+    # Obtener submissions con join y selectinload
+    result_works = await db.execute(
+        select(TaskSubmission)
+        .join(TaskSubmission.task)
+        .options(selectinload(TaskSubmission.task))
+        .where(
+            TaskSubmission.student_id == student.id,
+            Tasks.assignature_id == assignature_id
+        )
+    )
+    user_works = result_works.scalars().all()
     
- # Validar integridad de datos
+    # Validar integridad de datos
     for work in user_works:
         if work.task is None:
             raise HTTPException(
                 status_code=500, 
                 detail=f"Datos corruptos: Submission {work.id} sin task asociado"
             )
-
+    
     return user_works
