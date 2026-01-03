@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.database import get_db
 from sqlalchemy.orm import Session
@@ -9,18 +9,29 @@ from app.routers.auth import check_admin
 from app.schemas.assignature import AssignatureBase, AssignatureResponse, CurrentAssignaturesResponse, CurrentAssignaturesBase
 from app.models.assignature import Assignature, CurrentAssignatures
 from app.models.student import Student
+from sqlalchemy.orm import selectinload
 
 router = APIRouter()
 
 admin_router = APIRouter(prefix="/admin/assignature", tags=["Admin - Assignatures"], dependencies=[Depends(check_admin)])
 
 
+
 @admin_router.get("/getStudentAssignatures/{student_id}", response_model=CurrentAssignaturesResponse)
 async def get_student_assignatures(student_id: int, db: AsyncSession = Depends(get_db)):
-
-    result = await db.execute(select(CurrentAssignatures).where(CurrentAssignatures.student_id == student_id))
+    result = await db.execute(
+        select(CurrentAssignatures)
+        .options(selectinload(CurrentAssignatures.assignatures))  # Carga eager de la relación
+        .where(CurrentAssignatures.student_id == student_id)
+    )
     current_assignatures = result.scalars().first()
-
+    
+    if current_assignatures is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontraron asignaturas para el estudiante con ID {student_id}"
+        )
+    
     return current_assignatures
 
 @admin_router.get("/getAllAssignature/", response_model=List[AssignatureResponse])
@@ -32,25 +43,16 @@ async def get_all_assignature(db: AsyncSession = Depends(get_db)):
     return assignatures
 
 @admin_router.post("/addAssignature/", response_model=AssignatureResponse)
-async def add_assignature(assignature: AssignatureBase ,db: AsyncSession = Depends(get_db)):
-
-    new_assignature = Assignature(name = assignature.name)
+async def add_assignature(assignature: AssignatureBase, db: AsyncSession = Depends(get_db)):
+    new_assignature = Assignature(
+        name=assignature.name,
+        tag=assignature.tag  # ¡Faltaba esto!
+    )
     db.add(new_assignature)
     await db.commit()
     await db.refresh(new_assignature)
     return new_assignature
 
-@router.get("/getMyCurrentsAssignatures/", response_model=List[CurrentAssignaturesResponse])
-async def get_all_current_assignature(db: AsyncSession = Depends(get_db)):
-    # Validar que exista el estudiante
-    result = await db.execute(select(CurrentAssignatures))
-    current_assignatures = result.scalars().all()
-
-    if not current_assignatures:
-        raise HTTPException(status_code=404, detail="No dispone de asignaturas")
-
-    
-    return current_assignatures
 
 
 # Verifica que el estudiante exista, crea la tabla intermedia si no existe, busca la asignatura y si existe y no esta duplicada 
@@ -59,46 +61,58 @@ async def get_all_current_assignature(db: AsyncSession = Depends(get_db)):
 @admin_router.post("/student/{student_id}/addAssignature/{assignature_id}", response_model=CurrentAssignaturesResponse)
 async def add_assignature_to_student(student_id: int, assignature_id: int, db: AsyncSession = Depends(get_db)):
     # Validar que exista el estudiante
-
     result = await db.execute(
         select(Student).where(Student.id == student_id)
     )
     student = result.scalars().first()
-
     if not student:
         raise HTTPException(status_code=404, detail="El estudiante no existe")
-
-    # Buscar o crear el CurrentAssignatures
-    result_2 = await db.execute(
-        select(CurrentAssignatures).where(
-            CurrentAssignatures.student_id == student_id
-        )
-    )
-    current = result_2.scalars().first()    
-
-    if not current:
-        current = CurrentAssignatures(student_id=student_id)
-        db.add(current)
-        await db.commit()
-        await db.refresh(current)
-
-    # Buscar la asignatura
+    
+    # Buscar la asignatura primero
     result_3 = await db.execute(
         select(Assignature).where(Assignature.id == assignature_id)
     )
     assignature = result_3.scalars().first()
-
     if not assignature:
         raise HTTPException(status_code=404, detail="La asignatura no existe")
-
-    # Evitar duplicados
-    if assignature not in current.assignatures:
+    
+    # Buscar o crear el CurrentAssignatures (con selectinload)
+    result_2 = await db.execute(
+        select(CurrentAssignatures)
+        .options(selectinload(CurrentAssignatures.assignatures))
+        .where(CurrentAssignatures.student_id == student_id)
+    )
+    current = result_2.scalars().first()
+    
+    if not current:
+        # Crear nuevo CurrentAssignatures con la asignatura
+        current = CurrentAssignatures(student_id=student_id)
         current.assignatures.append(assignature)
+        db.add(current)
         await db.commit()
-        await db.refresh(current)
-
+        
+        # Recargar con selectinload
+        result_2 = await db.execute(
+            select(CurrentAssignatures)
+            .options(selectinload(CurrentAssignatures.assignatures))
+            .where(CurrentAssignatures.id == current.id)
+        )
+        current = result_2.scalars().first()
+    else:
+        # Evitar duplicados
+        if assignature not in current.assignatures:
+            current.assignatures.append(assignature)
+            await db.commit()
+            
+            # Recargar con selectinload
+            result_2 = await db.execute(
+                select(CurrentAssignatures)
+                .options(selectinload(CurrentAssignatures.assignatures))
+                .where(CurrentAssignatures.id == current.id)
+            )
+            current = result_2.scalars().first()
+    
     return current
-
 
 @admin_router.post("/student/{student_id}/initAssignatures", response_model=CurrentAssignaturesResponse)
 async def init_student_assignatures(student_id: int, db: AsyncSession = Depends(get_db)):
@@ -130,59 +144,68 @@ async def init_student_assignatures(student_id: int, db: AsyncSession = Depends(
 
     return current
 
+from sqlalchemy.orm import selectinload
+
 @admin_router.put("/student/{student_id}/assignatures", response_model=CurrentAssignaturesResponse)
 async def update_student_assignatures(student_id: int, assignature_ids: List[int], db: AsyncSession = Depends(get_db)):
     # Verificar existencia del estudiante
-
     result = await db.execute(
         select(Student).where(Student.id == student_id)
     )
     student = result.scalars().first()
-
     if not student:
         raise HTTPException(status_code=404, detail="El estudiante no existe")
-
-    # Buscar o crear el CurrentAssignatures
     
+    # Buscar CurrentAssignatures CON selectinload
     result_2 = await db.execute(
-        select(CurrentAssignatures).where(
-            CurrentAssignatures.student_id == student_id
-        )
+        select(CurrentAssignatures)
+        .options(selectinload(CurrentAssignatures.assignatures))
+        .where(CurrentAssignatures.student_id == student_id)
     )
     current = result_2.scalars().first()
-
+    
+    # Guardar el ID antes de cualquier operación
+    current_id = None
+    
     if not current:
+        # Crear nuevo
         current = CurrentAssignatures(student_id=student_id)
         db.add(current)
         await db.commit()
-        await db.refresh(current)
-
-    # Obtener todas las asignaturas válidas que existan en DB
+        current_id = current.id  # Guardar el ID después del commit
+    else:
+        current_id = current.id  # Ya tenemos el ID
+    
+    # Obtener todas las asignaturas válidas
     result_3 = await db.execute(
         select(Assignature).where(Assignature.id.in_(assignature_ids))
     )
     valid_assignatures = result_3.scalars().all()
-    # Actualizar la relación: borrar las anteriores y poner solo las nuevas
-    current.assignatures = valid_assignatures
-
-    await db.commit()
-    await db.refresh(current)
-
-    return current
-
-@router.get("/getAssignature/{id}", response_model=AssignatureResponse)
-async def get_assignature(id: int, db:AsyncSession = Depends(get_db)):
-
-    result = await db.execute(
-        select(Assignature).where(Assignature.id == id)
-    )
-    assignature = result.scalars().first()
-
-    if not assignature:
-        raise HTTPException(status_code=404, detail="No existe la asignatura solicitada")
     
-    return assignature
-
+    # Recargar current con selectinload usando el ID guardado
+    result_reload = await db.execute(
+        select(CurrentAssignatures)
+        .options(selectinload(CurrentAssignatures.assignatures))
+        .where(CurrentAssignatures.id == current_id)
+    )
+    current = result_reload.scalars().first()
+    
+    if not current:
+        raise HTTPException(status_code=500, detail="Error al cargar CurrentAssignatures")
+    
+    # Actualizar la relación
+    current.assignatures = valid_assignatures
+    await db.commit()
+    
+    # Recargar una última vez para retornar
+    result_final = await db.execute(
+        select(CurrentAssignatures)
+        .options(selectinload(CurrentAssignatures.assignatures))
+        .where(CurrentAssignatures.id == current_id)
+    )
+    current = result_final.scalars().first()
+    
+    return current
 
 @admin_router.delete("/deleteAssignature/{id_assignature}", response_model=str)
 async def delete_assignature(id_assignature : int, db: AsyncSession = Depends((get_db))):

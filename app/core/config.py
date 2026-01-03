@@ -21,4 +21,4 @@ if ENV_LOGIN == "production":
             "postgres://", "postgresql://", 1
         )
 else:
-    DATABASE_URL = "sqlite:///./app.db"
+    DATABASE_URL = "sqlite+aiosqlite:///./app.db"
