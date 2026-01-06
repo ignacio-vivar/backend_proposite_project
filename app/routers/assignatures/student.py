@@ -10,7 +10,7 @@ from app.models.student import Student
 from app.models.user import User
 from app.routers.auth import  get_current_user
 from app.schemas.assignature import AssignatureResponse
-from app.models.assignature import Assignature, CurrentAssignatures
+from app.models.assignature import CurrentAssignatures
 
 student_router = APIRouter(prefix="/assignature", tags=["Student - Assignatures"], dependencies=[Depends(get_current_user)])
 

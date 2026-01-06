@@ -3,14 +3,14 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import selectinload
 from app.database.database import get_db
 from app.models.student import Student
 from app.models.user import User
 from app.routers.auth import get_current_user
 
 from app.models.grade import TaskSubmission, Tasks
-from app.schemas.task_student import SubmissionStudentData, SubmissionWithTask
+from app.schemas.task_student import SubmissionStudentData
 
 student_router = APIRouter(prefix="/student", tags=["Students Califications"])
 

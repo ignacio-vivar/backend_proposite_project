@@ -5,7 +5,7 @@ from app.database.database import get_db
 from sqlalchemy import select
 from typing import List
 from app.routers.auth import check_admin
-from app.schemas.assignature import AssignatureBase, AssignatureResponse, CurrentAssignaturesResponse, CurrentAssignaturesBase
+from app.schemas.assignature import CurrentAssignaturesResponse
 from app.models.assignature import Assignature, CurrentAssignatures
 from app.models.student import Student
 from sqlalchemy.orm import selectinload

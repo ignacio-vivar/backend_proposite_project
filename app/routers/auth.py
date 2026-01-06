@@ -1,7 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 from datetime import timedelta
 from jose import JWTError, jwt
 from app.database.database import get_db
@@ -86,7 +85,7 @@ async def get_current_user(
         raise credentials_exception
     
 
-async def check_admin(current_user: User = Depends(get_current_user)):
+def check_admin(current_user: User = Depends(get_current_user)):
 
     is_admin = bool(current_user.user_type_id == 3)
 
