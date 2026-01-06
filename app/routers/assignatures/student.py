@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.database.database import get_db
-from sqlalchemy.orm import Session
 from app.models.student import Student
 from app.models.user import User
 from app.routers.auth import  get_current_user
@@ -17,18 +16,18 @@ student_router = APIRouter(prefix="/assignature", tags=["Student - Assignatures"
 
 
 
-@student_router.get("/getAssignature/{id}", response_model=AssignatureResponse)
-async def get_assignature(id: int, db:AsyncSession = Depends(get_db)):
-
-    result = await db.execute(
-        select(Assignature).where(Assignature.id == id)
-    )
-    assignature = result.scalars().first()
-
-    if not assignature:
-        raise HTTPException(status_code=404, detail="No existe la asignatura solicitada")
-    
-    return assignature
+# @student_router.get("/getAssignature/{id}", response_model=AssignatureResponse)
+# async def get_assignature(id: int, db:AsyncSession = Depends(get_db)):
+#
+#     result = await db.execute(
+#         select(Assignature).where(Assignature.id == id)
+#     )
+#     assignature = result.scalars().first()
+#
+#     if not assignature:
+#         raise HTTPException(status_code=404, detail="No existe la asignatura solicitada")
+#
+#     return assignature
 
 
 @student_router.get("/getMyCurrentsAssignatures/", response_model=List[AssignatureResponse])

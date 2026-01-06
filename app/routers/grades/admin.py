@@ -4,12 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select, delete
-from pydantic import BaseModel
 from sqlalchemy.orm.attributes import set_attribute
 from app.database.database import get_db
 from app.models.user import User
 from app.routers.auth import check_admin
-from app.models.grade import Tasks, TaskSubmission, Toe, Status
+from app.models.grade import Tasks, TaskSubmission, Status
 from app.models.student import Student
 from app.models.assignature import CurrentAssignatures, current_assignature_assignature
 from app.schemas.task_student import SubmissionMini, SubmissionUpdate, SubmissionWithStudentAndTask, TaskBase, TaskCreate, TaskUpdate
