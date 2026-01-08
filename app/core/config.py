@@ -4,7 +4,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 120
 
-ENV_LOGIN = os.getenv("ENV_LOGIN", "development")
+ENV_LOGIN = os.getenv("ENV_LOGIN", "ndevelopment")
 
 if ENV_LOGIN == "production":
     DATABASE_URL = (

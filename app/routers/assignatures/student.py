@@ -2,9 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
 from sqlalchemy.orm import selectinload
-
 from app.database.database import get_db
 from app.models.student import Student
 from app.models.user import User
@@ -13,21 +11,6 @@ from app.schemas.assignature import AssignatureResponse
 from app.models.assignature import CurrentAssignatures
 
 student_router = APIRouter(prefix="/assignature", tags=["Student - Assignatures"], dependencies=[Depends(get_current_user)])
-
-
-
-# @student_router.get("/getAssignature/{id}", response_model=AssignatureResponse)
-# async def get_assignature(id: int, db:AsyncSession = Depends(get_db)):
-#
-#     result = await db.execute(
-#         select(Assignature).where(Assignature.id == id)
-#     )
-#     assignature = result.scalars().first()
-#
-#     if not assignature:
-#         raise HTTPException(status_code=404, detail="No existe la asignatura solicitada")
-#
-#     return assignature
 
 
 @student_router.get("/getMyCurrentsAssignatures/", response_model=List[AssignatureResponse])
